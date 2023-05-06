@@ -1,6 +1,8 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, to_binary, Uint128};
+use cosmwasm_std::{BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Storage, to_binary, Uint128};
 use cosmwasm_storage::{Bucket, ReadonlyBucket};
 use crate::ContractError::Std;
 // use cw2::set_contract_version;
@@ -35,12 +37,11 @@ pub fn execute(
 
     match _msg {
         ExecuteMsg::CreatePool {
-            id,
             coin_a,
             coin_b,
             coin_a_reserve,
             coin_b_reserve,
-        } => create_pool(_deps, _env, _info, id, coin_a, coin_b, coin_a_reserve, coin_b_reserve),
+        } => create_pool(_deps, _env, _info, coin_a, coin_b, coin_a_reserve, coin_b_reserve),
         ExecuteMsg::Swap {
             pool_id,
             sent_amount,
@@ -52,18 +53,18 @@ pub fn execute(
 
 fn create_pool(
     deps: DepsMut,
-    _env: Env,
-    _info: MessageInfo,
-    id: String,
+    env: Env,
+    info: MessageInfo,
     coin_a: String,
     coin_b: String,
     coin_a_reserve: Uint128,
     coin_b_reserve: Uint128,
 ) -> Result<Response, ContractError> {
+    let pool_id = generate_pool_id(&coin_a, &coin_b);
     let pool = Pool {
-        id,
-        coin_a,
-        coin_b,
+        id: pool_id.clone(),
+        coin_a: coin_a.clone(),
+        coin_b: coin_b.clone(),
         coin_a_reserve,
         coin_b_reserve,
     };
@@ -71,8 +72,42 @@ fn create_pool(
     let mut pools_bucket = Bucket::new(deps.storage, POOLS_KEY);
     pools_bucket.save(pool.id.as_bytes(), &pool)?;
 
+    let sent_funds = info.funds;
+
+    let sent_coin_a = sent_funds
+        .iter()
+        .find(|coin| coin.denom == coin_a)
+        .ok_or(Std(StdError::generic_err(
+            "Insufficient Funds1",
+        )))?;
+    let sent_coin_b = sent_funds
+        .iter()
+        .find(|coin| coin.denom == coin_b)
+        .ok_or(Std(StdError::generic_err(
+            "Insufficient Funds2",
+        )))?;
+
+    if sent_coin_a.amount != coin_a_reserve || sent_coin_b.amount != coin_b_reserve {
+        return Err(Std(StdError::generic_err(
+            "Insufficient Funds3",
+        )));
+    }
+
     Ok(Response::default())
 }
+
+fn generate_pool_id(token_a: &str, token_b: &str) -> String {
+    let sorted_tokens = if token_a < token_b {
+        (token_a, token_b)
+    } else {
+        (token_b, token_a)
+    };
+
+    let mut hasher = DefaultHasher::new();
+    sorted_tokens.hash(&mut hasher);
+    format!("pool_{}", hasher.finish())
+}
+
 
 
 fn swap(
@@ -169,9 +204,9 @@ fn query_pool(deps: Deps, id: String) -> StdResult<Pool> {
 
 #[cfg(test)]
 mod tests {
-    use cosmwasm_std::{from_binary, Uint128};
+    use cosmwasm_std::{Coin, coin, coins, from_binary, MessageInfo, Uint128};
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use crate::contract::{calculate_outgoing_amount, execute, instantiate, query};
+    use crate::contract::{calculate_outgoing_amount, execute, generate_pool_id, instantiate, query};
     use crate::msg::{ExecuteMsg, GetPoolResponse, InstantiateMsg, Pool, QueryMsg};
 
     #[test]
@@ -180,30 +215,39 @@ mod tests {
 
         let info = mock_info("creator", &[]);
         let env = mock_env();
-        instantiate(deps.as_mut(), env.clone(), info.clone(), InstantiateMsg{}).unwrap();
+        instantiate(deps.as_mut(), env.clone(), info.clone(), InstantiateMsg{} ).unwrap();
 
         let msg = ExecuteMsg::CreatePool {
-            id: "pool_1".to_string(),
             coin_a: "coin_a".to_string(),
             coin_b: "coin_b".to_string(),
             coin_a_reserve: Uint128::from(1000u32),
             coin_b_reserve: Uint128::from(2000u32),
         };
-        execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
+        let sent_funds = [(coin(1000, "coin_a")),(coin(2000, "coin_b"))];
+        let info_with_funds = mock_info_with_funds("creator", &sent_funds);
+        execute(deps.as_mut(), env.clone(), info_with_funds, msg).unwrap();
+        let id = generate_pool_id("coin_a","coin_b");
         let query_msg = QueryMsg::GetPool {
-            id: "pool_1".to_string(),
+            id: id.clone(),
         };
         let pool_bin = query(deps.as_ref(), env.clone(), query_msg).unwrap();
         let response: GetPoolResponse = from_binary(&pool_bin).unwrap();
         let pool = response.pool;
-        assert_eq!(pool.id, "pool_1");
+        assert_eq!(pool.id, id);
         assert_eq!(pool.coin_a, "coin_a");
         assert_eq!(pool.coin_b, "coin_b");
         assert_eq!(pool.coin_a_reserve, Uint128::from(1000u32));
         assert_eq!(pool.coin_b_reserve, Uint128::from(2000u32));
     }
 
+    fn mock_info_with_funds(sender: &str, funds: &[Coin]) -> MessageInfo {
+        let mut info = mock_info(sender, funds);
+        info.funds = funds.to_vec();
+        info
+    }
+
+    #[test]
     #[test]
     fn test_swap_a_to_b() {
         let mut deps = mock_dependencies();
@@ -213,13 +257,16 @@ mod tests {
         instantiate(deps.as_mut(), env.clone(), info.clone(), InstantiateMsg{}).unwrap();
 
         let msg = ExecuteMsg::CreatePool {
-            id: "pool_1".to_string(),
             coin_a: "coin_a".to_string(),
             coin_b: "coin_b".to_string(),
             coin_a_reserve: Uint128::from(1000u32),
             coin_b_reserve: Uint128::from(2000u32),
         };
-        execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+        let sent_funds = [(coin(1000, "coin_a")),(coin(2000, "coin_b"))];
+        let info_with_funds = mock_info_with_funds("creator", &sent_funds);
+        execute(deps.as_mut(), env.clone(), info_with_funds, msg).unwrap();
+
+        let pool_id = generate_pool_id("coin_a", "coin_b");
 
         let sent_amount = Uint128::from(100u32);
         let expected_received_amount = calculate_outgoing_amount(
@@ -230,7 +277,7 @@ mod tests {
             .unwrap();
 
         let msg = ExecuteMsg::Swap {
-            pool_id: "pool_1".to_string(),
+            pool_id: pool_id.clone(),
             sent_amount,
             min_received_amount: Uint128::from(50u32),
             is_a_to_b: true,
@@ -239,7 +286,7 @@ mod tests {
         assert_eq!(res.messages.len(), 1);
 
         let query_msg = QueryMsg::GetPool {
-            id: "pool_1".to_string(),
+            id: pool_id,
         };
         let pool_bin = query(deps.as_ref(), env.clone(), query_msg).unwrap();
         let response: GetPoolResponse = from_binary(&pool_bin).unwrap();

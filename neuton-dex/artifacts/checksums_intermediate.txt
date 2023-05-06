@@ -1,1 +1,1 @@
-da53f0bb07980ba651290c84731355202b1e5f8ec26bbabdcdd63a510557ead5  ./target/wasm32-unknown-unknown/release/neuton_dex.wasm
+7767b718312436033aaeb619c156180a910450ff6478c5bbc87670556b2d3959  ./target/wasm32-unknown-unknown/release/neuton_dex.wasm

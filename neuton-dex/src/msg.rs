@@ -9,7 +9,6 @@ pub struct InstantiateMsg {}
 #[cw_serde]
 pub enum ExecuteMsg {
     CreatePool {
-        id: String,
         coin_a: String,
         coin_b: String,
         coin_a_reserve: Uint128,
