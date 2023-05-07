@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Binary, Coin};
+use cosmwasm_std::{Addr, Binary, Coin, Uint128};
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -7,7 +7,10 @@ pub struct InstantiateMsg {
 
 #[cw_serde]
 pub enum ExecuteMsg {
-    SwapExactIn { call: Binary, token_in: Coin, min_token_out: Coin }
+    SwapExactIn { call: Binary, token_in: Coin, min_token_out: Coin },
+    CallSwaps {
+        swap_calls: Vec<SwapCall>,
+    },
 }
 
 #[cw_serde]
@@ -23,3 +26,12 @@ pub enum QueryMsg {
 pub struct GetCountResponse {
     pub count: i32,
 }
+
+#[cw_serde]
+pub struct SwapCall {
+    pub contract_address: Addr,
+    pub swap_binary: Binary,
+    pub funds: Vec<Coin>,
+    // add additional params for interchain calls here
+}
+
