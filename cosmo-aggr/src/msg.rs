@@ -16,6 +16,9 @@ pub enum ExecuteMsg {
     CallOsmosisSwaps {
         swap_calls: Vec<SwapOsmosisCall>,
     },   
+    RecieveCallback{
+        swap_call:SwapOsmosisCall
+    }
 }
 
 #[cw_serde]

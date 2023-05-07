@@ -4,6 +4,7 @@ use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult 
 use cw2::set_contract_version;
 use crate::contract::execute::execute_calling_swaps;
 use crate::contract::execute::execute_osmosis_swaps;
+use crate::contract::execute::execute_recieve_callback;
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE};
@@ -41,6 +42,7 @@ pub fn execute(
         ExecuteMsg::SwapExactIn { call, token_in, min_token_out } => execute::swapExactIn(deps, info, call, token_in, min_token_out ),
         ExecuteMsg::CallOsmosisSwaps { swap_calls} => execute_osmosis_swaps(deps,_env, info, swap_calls),
         ExecuteMsg::CallSwaps { swap_calls } => execute_calling_swaps(deps, _env, info, swap_calls),
+        ExecuteMsg::RecieveCallback { swap_call} => execute_recieve_callback(deps,_env, info, swap_call),
     }
 }
 
@@ -124,6 +126,15 @@ pub mod execute {
             res = res.add_message(ibc_msg);
         }
         Ok(res)
+    }
+
+    pub fn execute_recieve_callback(
+        deps: DepsMut,
+        env: Env,
+        info: MessageInfo,
+        swap_calls: SwapOsmosisCall
+    ) -> Result<Response, ContractError> {
+        todo!("verification and logic")
     }
 
 }
