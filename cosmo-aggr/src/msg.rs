@@ -1,3 +1,5 @@
+use std::string;
+
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary, Coin, Uint128};
 
@@ -11,6 +13,9 @@ pub enum ExecuteMsg {
     CallSwaps {
         swap_calls: Vec<SwapCall>,
     },
+    CallOsmosisSwaps {
+        swap_calls: Vec<SwapOsmosisCall>,
+    },   
 }
 
 #[cw_serde]
@@ -32,6 +37,16 @@ pub struct SwapCall {
     pub contract_address: Addr,
     pub swap_binary: Binary,
     pub funds: Vec<Coin>,
+    // add additional params for interchain calls here
+}
+
+#[cw_serde]
+pub struct SwapOsmosisCall {
+    pub contract_address: Addr,
+    pub TRANSFER_PORT: String,
+    pub TRANSFER_CHANNEL: String,
+    pub memo: String,
+    pub funds: Coin,
     // add additional params for interchain calls here
 }
 

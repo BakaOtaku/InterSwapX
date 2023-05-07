@@ -1,12 +1,13 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult };
+use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult ,IbcMsg};
 use cw2::set_contract_version;
 use crate::contract::execute::execute_calling_swaps;
-
+use crate::contract::execute::execute_osmosis_swaps;
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE};
+use crate::proto;
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:cosmo-aggr";
@@ -38,6 +39,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::SwapExactIn { call, token_in, min_token_out } => execute::swapExactIn(deps, info, call, token_in, min_token_out ),
+        ExecuteMsg::CallOsmosisSwaps { swap_calls} => execute_osmosis_swaps(deps,_env, info, swap_calls),
         ExecuteMsg::CallSwaps { swap_calls } => execute_calling_swaps(deps, _env, info, swap_calls),
     }
 }
@@ -47,14 +49,15 @@ pub fn execute(
 pub mod execute {
     // use std::mem::swap;
     // use std::str::FromStr;
-    use cosmwasm_std::{Addr, Coin, CosmosMsg, from_slice, StdError, to_binary, Uint128, WasmMsg};
+    use cosmwasm_std::{Addr, Coin, CosmosMsg, from_slice, StdError, to_binary, Uint128, WasmMsg, IbcMsg};
     use osmosis_std::types::osmosis::gamm::v1beta1::MsgSwapExactAmountIn;
     use crate::ContractError::Std;
-    use crate::msg::SwapCall;
+    use crate::msg::{SwapCall, SwapOsmosisCall};
     use super::*;
 
+    // for call to others
     pub fn swapExactIn(deps: DepsMut, info: MessageInfo, call: Binary, tokenIn: Coin, min_token_out: Coin) -> Result<Response, ContractError> {
-        let msg_swap = build_exact_in_validate(call)?;
+        let msg_swap: MsgSwapExactAmountIn = build_exact_in_validate(call)?;
         let cosmos_msg_swap: CosmosMsg = msg_swap.clone().into();
         check_sufficient_funds(&info, tokenIn)?;
         let minimum_token_out = msg_swap.token_out_min_amount; // when IBC implemented after swap this amount will be sent back to M1 src chain
@@ -97,6 +100,31 @@ pub mod execute {
         Ok(res)
     }
 
+    pub fn execute_osmosis_swaps(
+        deps: DepsMut,
+        env: Env,
+        info: MessageInfo,
+        swap_calls: Vec<SwapOsmosisCall>,
+    ) -> Result<Response, ContractError> {
+        let mut res = Response::new();
+
+        for swap_call in swap_calls {
+
+            let ibc_msg= proto::MsgTransfer{
+                source_port: swap_call.TRANSFER_PORT.to_string(),
+                source_channel: swap_call.TRANSFER_CHANNEL.to_string(),
+                token: Some(swap_call.funds.into()),
+                sender: env.contract.address.clone().into(),
+                receiver: swap_call.contract_address.into(),
+                timeout_height: None,
+                timeout_timestamp: None,
+                memo:swap_call.memo,  
+            };
+
+            res = res.add_message(ibc_msg);
+        }
+        Ok(res)
+    }
 
 }
 
