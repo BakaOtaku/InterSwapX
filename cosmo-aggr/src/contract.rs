@@ -4,7 +4,6 @@ use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult 
 use cw2::set_contract_version;
 use crate::contract::execute::execute_calling_swaps;
 use crate::contract::execute::execute_osmosis_swaps;
-use crate::contract::execute::execute_recieve_callback;
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE};
@@ -40,15 +39,16 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::SwapExactIn { call, token_in, min_token_out } => execute::swapExactIn(deps, info, call, token_in, min_token_out ),
-        ExecuteMsg::CallOsmosisSwaps { swap_calls} => execute_osmosis_swaps(deps,_env, info, swap_calls),
+        // ExecuteMsg::CallOsmosisSwaps { swap_calls} => execute_osmosis_swaps(deps,_env, info, swap_calls),
         ExecuteMsg::CallSwaps { swap_calls } => execute_calling_swaps(deps, _env, info, swap_calls),
-        ExecuteMsg::RecieveCallback { swap_call} => execute_recieve_callback(deps,_env, info, swap_call),
     }
 }
 
 
 
 pub mod execute {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
     // use std::mem::swap;
     // use std::str::FromStr;
     use cosmwasm_std::{Addr, Coin, CosmosMsg, from_slice, StdError, to_binary, Uint128, WasmMsg, IbcMsg};
@@ -90,14 +90,23 @@ pub mod execute {
         let mut res = Response::new();
 
         for swap_call in swap_calls {
-            // handle cases for
-
-            let cosmos_msg = CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: swap_call.contract_address.to_string(),
-                msg: swap_call.swap_binary,
-                funds: swap_call.funds.clone(),
-            });
-            res = res.add_message(cosmos_msg);
+            if swap_call.chain_id == "osmosis" {
+                let x = execute_osmosis_swaps(
+                    deps,
+                    env.clone(),
+                    info.clone(),
+                    swap_call.osmo_call.unwrap()
+                );
+                return x;
+            } else {
+                // handle cases for non osmosis based on dex_helpers
+                let cosmos_msg = CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: swap_call.contract_address.to_string(),
+                    msg: swap_call.swap_binary,
+                    funds: swap_call.funds.clone(),
+                });
+                res = res.add_message(cosmos_msg);
+            }
         }
         Ok(res)
     }
@@ -106,35 +115,23 @@ pub mod execute {
         deps: DepsMut,
         env: Env,
         info: MessageInfo,
-        swap_calls: Vec<SwapOsmosisCall>,
+        osmo_calls: SwapOsmosisCall,
     ) -> Result<Response, ContractError> {
         let mut res = Response::new();
 
-        for swap_call in swap_calls {
+        let ibc_msg= proto::MsgTransfer{
+            source_port: osmo_calls.TRANSFER_PORT.to_string(),
+            source_channel: osmo_calls.TRANSFER_CHANNEL.to_string(),
+            token: Some(osmo_calls.funds.into()),
+            sender: env.contract.address.clone().into(),
+            receiver: osmo_calls.contract_address.into(),
+            timeout_height: None,
+            timeout_timestamp: None,
+            memo:osmo_calls.memo,
+        };
 
-            let ibc_msg= proto::MsgTransfer{
-                source_port: swap_call.TRANSFER_PORT.to_string(),
-                source_channel: swap_call.TRANSFER_CHANNEL.to_string(),
-                token: Some(swap_call.funds.into()),
-                sender: env.contract.address.clone().into(),
-                receiver: swap_call.contract_address.into(),
-                timeout_height: None,
-                timeout_timestamp: None,
-                memo:swap_call.memo,  
-            };
-
-            res = res.add_message(ibc_msg);
-        }
+        res = res.add_message(ibc_msg);
         Ok(res)
-    }
-
-    pub fn execute_recieve_callback(
-        deps: DepsMut,
-        env: Env,
-        info: MessageInfo,
-        swap_calls: SwapOsmosisCall
-    ) -> Result<Response, ContractError> {
-        todo!("verification and logic")
     }
 
 }
@@ -143,11 +140,11 @@ pub mod execute {
 mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, from_binary, Uint128, to_binary, Uint64, Addr, StdError, Coin as StdCoin};
+    use cosmwasm_std::{coins, from_binary, Uint128, to_binary, Uint64, Addr, StdError, Coin as StdCoin, coin, CosmosMsg, WasmMsg};
     use osmosis_std::types::cosmos::base::v1beta1::Coin;
     use osmosis_std::types::osmosis::gamm::v1beta1::{MsgSwapExactAmountIn, SwapAmountInRoute};
     use schemars::_serde_json::json;
-    use crate::msg::{SwapCall};
+    use crate::msg::{SwapCall, SwapOsmosisCall};
     use cosmwasm_schema::{cw_serde};
 
     #[test]
@@ -188,12 +185,59 @@ mod tests {
                     denom: "coin_a".to_string(),
                     amount: Uint128::from(100u32),
                 }],
+                chain_id: "".to_string(),
+                osmo_call: None,
+                start_index: 0,
             }],
         };
 
         let res = execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
         assert_eq!(res.messages.len(), 1);
     }
+
+    #[test]
+    fn test_execute_osmo_calling_swaps() {
+        let mut deps = mock_dependencies();
+        let env = mock_env();
+        let info = mock_info("sender", &coins(1000, "uatom"));
+
+        let swap_call_osmosis = SwapCall {
+            contract_address: Addr::unchecked("osmo_contract"),
+            swap_binary: Binary::from(vec![1]),
+            funds: vec![coin(100, "uatom")],
+            chain_id: "osmosis".to_string(),
+            osmo_call: Some(SwapOsmosisCall {
+                contract_address: Addr::unchecked("osmo_receiver"),
+                TRANSFER_PORT: "transfer_port".to_string(),
+                TRANSFER_CHANNEL: "transfer_channel".to_string(),
+                memo: "memo".to_string(),
+                funds: coin(100, "uatom"),
+            }),
+            start_index: 0,
+        };
+
+        let swap_call_juno = SwapCall {
+            contract_address: Addr::unchecked("juno_contract"),
+            swap_binary: Binary::from(vec![1]),
+            funds: vec![coin(100, "uatom")],
+            chain_id: "juno".to_string(),
+            osmo_call: None,
+            start_index: 0,
+        };
+
+        let swap_calls = vec![swap_call_osmosis, swap_call_juno];
+
+        let res = execute_calling_swaps(deps.as_mut(), env, info, swap_calls).unwrap();
+        let messages = res.messages;
+        assert_eq!(messages.len(), 1);
+
+        if let CosmosMsg::Stargate { type_url, .. } = &messages[0].msg {
+            assert_eq!(type_url, "/ibc.applications.transfer.v1.MsgTransfer");
+        } else {
+            panic!("Unexpected message type for the first message");
+        }
+    }
+
 
     #[cw_serde]
     pub struct Swap {
