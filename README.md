@@ -1,7 +1,7 @@
 <p align="center"><img src="/client/public/img/main.png" width="300"></p>
 <h6 align="center">DeFi aggregator that unites the liquidity of decentralized exchanges into one comprehensive interface via ibc.</h6>
 
-- [Presentation File 🔗](https://www.canva.com/design/DAE5AbJGNFU/nVl3f4oPNXXRHHvFJg47qQ/view)
+- [Presentation File 🔗](https://github.com/BakaOtaku/InterSwapX/blob/main/InterSwapX.pdf)
 - [Presentation Video 🔗](https://vimeo.com/824908962)
 - Deployed Contract
   - IBC Relayer : `ibc/85F860A9556E285E2F5E6CBC39F04E8E7A497488B9E7D11912030EB49D5E2CCB`
