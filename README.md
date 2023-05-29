@@ -6,7 +6,9 @@
 - Deployed Contract
   - IBC Relayer : `ibc/85F860A9556E285E2F5E6CBC39F04E8E7A497488B9E7D11912030EB49D5E2CCB`
   - Injective Testnet InterSwapX aggregator address: `inj19xtqveu7ezny7t83lzmp2u8mezhlejt699clps`
-  - Neutron Testnet InterSwapX aggregator address: `neutron1ujq98szygxahnxud8erct5hc4sjhu8v7760rsapagtwutf3p6njqc5zcxf`
+  - Neutron Testnet InterSwapX aggregator address: `neutron1v8gc4dfu62az3rwwre3mvu5u5tz790rtmc59wvcq3wfvfklhzc7scjal72`
+  - Neutron Testnet InterSwapx Dex address: `neutron18d6vrdjn9q0c6xurycx46v5fkhswt78grkwwqsgtvvppua8hmfrshk49xm`
+  - Neutron Testnet IBC Relayer address: `neutron1n64nd33dazlzs5436kec6267wuy93j8gmph8uf`
   - Osmosis Testnet CrossChain Call contracts : `osmo10qevam8t96htlgz3dr2y8vl573ya3ecenuk0fyeczxlqj8hgpyrs9sc90y`
 
 ---
