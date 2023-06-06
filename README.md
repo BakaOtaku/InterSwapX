@@ -10,7 +10,7 @@
   - Neutron Testnet InterSwapx Dex address: `neutron18d6vrdjn9q0c6xurycx46v5fkhswt78grkwwqsgtvvppua8hmfrshk49xm`
   - Neutron Testnet IBC Relayer address: `neutron1n64nd33dazlzs5436kec6267wuy93j8gmph8uf`
   - Osmosis Testnet CrossChain Call contracts : `osmo10qevam8t96htlgz3dr2y8vl573ya3ecenuk0fyeczxlqj8hgpyrs9sc90y`
-- RPC of Forked Osmosis Testnet for IBC Hooks: https://rpc.osmotest.34.125.223.65.nip.io/
+- RPC of Independent Private Testnet based on osmosis v15.x for IBC Hooks: https://rpc.osmotest.34.125.223.65.nip.io/
 
 ---
 
